@@ -1,0 +1,3 @@
+# Ignore all files in landing (but keep the directory)
+data_lake/landing/*
+!data_lake/landing/.gitkeep 
