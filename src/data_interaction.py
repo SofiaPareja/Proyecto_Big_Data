@@ -7,6 +7,7 @@ from pyspark.sql.types import IntegerType
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
+import numpy as np
 from src.config import CURATED_ZONE_PATH, REPORTS_DIR, REGION_OF_INTEREST
 import datetime
 
@@ -32,42 +33,8 @@ def generate_kpis_and_visualizations(spark: SparkSession):
     else:
         print("Advertencia: La columna 'region' no se encontró en df_curated. Los KPIs específicos de región no se filtrarán correctamente.")
         df_curated_uy_spark = df_curated
-    
-    # try:
-        
-    #     df_pd = df_curated.select(
-    #         "tconst", "regional_title", "global_primary_title", "startYear",
-    #         "genres", "averageRating", "numVotes", "directors", "principal_actors"
-    #     ).toPandas()
-    # except Exception as e:
-    #     df_pd = df_curated.limit(100000).toPandas() #agarrar una muestra si es muy grande
+  
 
-
-    #KPI 1: top 10 generos mas populares por número de películas y rating promedio en region UY
-    # if 'genres' in df_pd.columns and not df_pd['genres'].isnull().all():
-    #     df_genres_exploded = df_pd.assign(genre=df_pd['genres'].apply(lambda x: str(x).split(',') if x else [])) \
-    #                               .explode('genre')
-    #     df_genres_exploded['genre'] = df_genres_exploded['genre'].str.strip()
-        
-    #     genre_popularity = df_genres_exploded[df_genres_exploded['genre'] != ''].groupby("genre").agg(
-    #         count=('tconst', 'count'),
-    #         avg_rating=('averageRating', 'mean'),
-    #         total_votes=('numVotes', 'sum')
-    #     ).reset_index().sort_values(by="count", ascending=False).head(10)
-
-    #     plt.figure(figsize=(14, 7))
-    #     sns.barplot(x="genre", y="count", data=genre_popularity, palette="viridis")
-    #     plt.title(f"Top 10 generos mas populares por numero de pelis en {REGION_OF_INTEREST}", fontsize=16)
-    #     plt.xlabel("genero", fontsize=12)
-    #     plt.ylabel("numro de peliculas", fontsize=12)
-    #     plt.xticks(rotation=45, ha='right', fontsize=10)
-    #     plt.yticks(fontsize=10)
-    #     plt.tight_layout()
-    #     plt.savefig(os.path.join(REPORTS_DIR, "genre_popularity.png"))
-    #     plt.close()
-        
-    # else:
-    #     print("no se pudo generar el KPI de generos")
 
     if 'genres' in df_curated_uy_spark.columns and 'tconst' in df_curated_uy_spark.columns:
         df_genres_exploded_uy_spark = df_curated_uy_spark.filter(
@@ -86,9 +53,9 @@ def generate_kpis_and_visualizations(spark: SparkSession):
 
             plt.figure(figsize=(14, 7))
             sns.barplot(x="genre", y="count", data=genre_popularity_uy_pd, palette="viridis")
-            plt.title(f"Top 10 géneros más populares por número de películas en {REGION_OF_INTEREST}", fontsize=16)
+            plt.title(f"Top 10 géneros más populares por cantidad de películas en {REGION_OF_INTEREST}", fontsize=16)
             plt.xlabel("Género", fontsize=12)
-            plt.ylabel("Número de películas", fontsize=12)
+            plt.ylabel("Cantidad de películas", fontsize=12)
             plt.xticks(rotation=45, ha='right', fontsize=10)
             plt.yticks(fontsize=10)
             plt.tight_layout()
@@ -100,122 +67,8 @@ def generate_kpis_and_visualizations(spark: SparkSession):
         print(f"No se pudo generar el KPI de géneros para {REGION_OF_INTEREST}: columna 'genres' o 'tconst' no disponible en el DataFrame curado filtrado.")
 
 
-    #KPI 2: Top películas prometedoras por rating y votos ---
-    # Consideramos "prometedora" por una combinación de rating alto y un mínimo de votos
-    # min_votes_limite = 1000 
-    # if 'numVotes' in df_pd.columns and 'averageRating' in df_pd.columns:
-    #     df_promising_movies = df_pd[(df_pd['numVotes'] >= min_votes_limite) & (df_pd['averageRating'].notna())]
-        
-    #     if not df_promising_movies.empty:
-    #         top_promising = df_promising_movies.sort_values(by=['averageRating', 'numVotes'], ascending=[False, False]).head(20)
-    #         top_promising['directors_str'] = top_promising['directors'].apply(lambda x: ', '.join(x) if isinstance(x, list) else '')
-    #         top_promising['principal_actors_str'] = top_promising['principal_actors'].apply(lambda x: ', '.join(x) if isinstance(x, list) else '')
-
-    #         print(top_promising[[
-    #             'regional_title', 'startYear', 'genres', 'averageRating', 'numVotes',
-    #             'directors_str', 'principal_actors_str'
-    #         ]].to_string(index=False))
-    #     else:
-    #         print(f"No se encontraron películas que cumplan con los criterios de minimo de votos {min_votes_limite} en  region{REGION_OF_INTEREST}.")
-    # else:
-    #     print("No se pudo generar el KPI de películas prometedoras")
-
-
-
     min_votes_limite = 1000 
-    #usamos df_curated_uy_spark para este KPI
-    if all(col_name in df_curated_uy_spark.columns for col_name in ['numVotes', 'averageRating', 'directors', 'principal_actors', 'regional_title', 'startYear', 'genres']):
-        df_promising_movies_uy_spark = df_curated_uy_spark.filter(
-            (col('numVotes') >= min_votes_limite) & (col('averageRating').isNotNull())
-        ).orderBy(col('averageRating').desc(), col('numVotes').desc()).limit(20)
-
-        if not df_promising_movies_uy_spark.isEmpty():
-            df_promising_movies_uy_pd = df_promising_movies_uy_spark.select(
-                "regional_title", "startYear", "genres", "averageRating", "numVotes",
-                "directors", "principal_actors"
-            ).toPandas()
-            
-            df_promising_movies_uy_pd['directors_str'] = df_promising_movies_uy_pd['directors'].apply(lambda x: ', '.join(x) if isinstance(x, list) else '')
-            df_promising_movies_uy_pd['principal_actors_str'] = df_promising_movies_uy_pd['principal_actors'].apply(lambda x: ', '.join(x) if isinstance(x, list) else '')
-
-            print(f"\nTop Películas Prometedoras en {REGION_OF_INTEREST}")
-            print(df_promising_movies_uy_pd[[
-                'regional_title', 'startYear', 'genres', 'averageRating', 'numVotes',
-                'directors_str', 'principal_actors_str'
-            ]].to_string(index=False))
-        else:
-            print(f"No se encontraron películas que cumplan con los criterios de mínimo de votos {min_votes_limite} en {REGION_OF_INTEREST}.")
-    else:
-        print(f"No se pudo generar el KPI de películas prometedoras para {REGION_OF_INTEREST}: columnas necesarias no disponibles en el DataFrame curado filtrado.")
-
-
-    # #KPI 3: distribución de ratings
-    # if 'averageRating' in df_pd.columns and not df_pd['averageRating'].isnull().all():
-    #     plt.figure(figsize=(10, 6))
-    #     sns.histplot(df_pd['averageRating'].dropna(), bins=20, kde=True, color='skyblue')
-    #     plt.title(f"distribución de ratings en {REGION_OF_INTEREST}", fontsize=16)
-    #     plt.xlabel("rating promedio", fontsize=12)
-    #     plt.ylabel("frecuencia", fontsize=12)
-    #     plt.xticks(fontsize=10)
-    #     plt.yticks(fontsize=10)
-    #     plt.tight_layout()
-    #     plt.savefig(os.path.join(REPORTS_DIR, "rating_distribution.png"))
-    #     plt.close()
-    #     print(f"Reporte: Distribución de Ratings guardado en {os.path.join(REPORTS_DIR, 'rating_distribution.png')}")
-    # else:
-    #     print("No se pudieron generar el KPI de distribución de ratings: columna 'averageRating' no disponible o vacía.")
-
    
-    # if 'startYear' in df_curated.columns and 'genres' in df_curated.columns:
-    #     df_exploded_genres_by_year_spark = df_curated.filter(
-    #         col("startYear").isNotNull() & col("genres").isNotNull() & (trim(col("genres")) != '')
-    #     ) \
-    #     .withColumn("startYear_int", col("startYear").cast(IntegerType())) \
-    #     .withColumn("genre", explode(split(col("genres"), ","))) \
-    #     .withColumn("genre", trim(col("genre")))
-
-    #     df_exploded_genres_by_year_spark = df_exploded_genres_by_year_spark.filter(col("genre") != '')
-
-    #     # (Opcional) Limitar a los Top N géneros más frecuentes para la visualización
-    #     # Esto hace el gráfico más legible si hay muchos géneros. Aquí tomamos los 7 principales.
-    #     NUM_TOP_GENRES_FOR_TRENDS = 7 # Puedes ajustar este número
-        
-    #     # Primero, calcula la frecuencia de los géneros en todo el dataset curado
-    #     genre_counts_overall = df_exploded_genres_by_year_spark.groupBy("genre").count().orderBy(col("count").desc())
-        
-    #     # Obtiene los nombres de los géneros más frecuentes
-    #     top_genres_names = [row.genre for row in genre_counts_overall.limit(NUM_TOP_GENRES_FOR_TRENDS).collect()]
-        
-    #     # Filtra el DataFrame explotado para incluir solo estos géneros principales
-    #     df_filtered_genres_for_trends_spark = df_exploded_genres_by_year_spark.filter(col("genre").isin(top_genres_names))
-
-    #     # 2. Agrupar por año y género, y contar películas con Spark
-    #     year_genre_trends_spark = df_filtered_genres_for_trends_spark.groupBy("startYear_int", "genre") \
-    #                                                                 .agg(count(col("tconst")).alias("count")) \
-    #                                                                 .orderBy("startYear_int", "genre")
-
-    #     # 3. Convertir el resultado pequeño y agregado a Pandas para la visualización
-    #     if not year_genre_trends_spark.isEmpty():
-    #         year_genre_trends_pd = year_genre_trends_spark.toPandas()
-
-    #         plt.figure(figsize=(15, 8)) # Ajusta el tamaño de la figura
-    #         sns.lineplot(x="startYear_int", y="count", hue="genre", data=year_genre_trends_pd, marker='o') # 'hue' para líneas por género
-    #         plt.title(f"Número de Películas Estrenadas por Año por Género (Top {len(top_genres_names)} Géneros) en {REGION_OF_INTEREST}", fontsize=16)
-    #         plt.xlabel("Año de Estreno", fontsize=12)
-    #         plt.ylabel("Número de Películas", fontsize=12)
-    #         plt.grid(True)
-    #         plt.legend(title="Género", bbox_to_anchor=(1.05, 1), loc='upper left') # Mueve la leyenda fuera del gráfico
-    #         plt.tight_layout()
-    #         plt.savefig(os.path.join(REPORTS_DIR, "year_genre_trends.png")) # Guarda con un nuevo nombre
-    #         plt.close()
-    #         print(f"Reporte: Películas por Año de Estreno por Género guardado en {os.path.join(REPORTS_DIR, 'year_genre_trends.png')}")
-    #     else:
-    #         print("No se pudo generar el KPI de tendencias por año por género: el DataFrame de tendencias está vacío.")
-        
-    # else:
-    #     print("No se pudo generar el KPI de tendencias por año por género: columna 'startYear' o 'genres' no disponible en el DataFrame curado.")
-
-
 
     #KPI 3: distribucion de ratings en region UY
     #usamos df_curated_uy_spark para este KPI
@@ -269,15 +122,14 @@ def generate_kpis_and_visualizations(spark: SparkSession):
 
             plt.figure(figsize=(15, 8))
             sns.lineplot(x="startYear_int", y="count", hue="genre", data=year_genre_trends_uy_pd, marker='o')
-            plt.title(f"Número de Películas Estrenadas por Año por Género (Top {len(top_genres_names_uy)} Géneros) en {REGION_OF_INTEREST}", fontsize=16)
-            plt.xlabel("Año de Estreno", fontsize=12)
-            plt.ylabel("Número de Películas", fontsize=12)
+            plt.title(f"Número de películas estrenadas por año por género (Top {len(top_genres_names_uy)} Géneros) en {REGION_OF_INTEREST}", fontsize=16)
+            plt.xlabel("Año de estreno", fontsize=12)
+            plt.ylabel("Número de películas", fontsize=12)
             plt.grid(True)
             plt.legend(title="Género", bbox_to_anchor=(1.05, 1), loc='upper left')
             plt.tight_layout()
             plt.savefig(os.path.join(REPORTS_DIR, f"year_genre_trends_{REGION_OF_INTEREST}.png"))
             plt.close()
-            print(f"Reporte: Películas por Año de Estreno por Género para {REGION_OF_INTEREST} guardado en {os.path.join(REPORTS_DIR, f'year_genre_trends_{REGION_OF_INTEREST}.png')}")
         else:
             print(f"No se pudo generar el KPI de tendencias por año por género para {REGION_OF_INTEREST}: el DataFrame de tendencias está vacío.")
         
@@ -291,7 +143,6 @@ def generate_kpis_and_visualizations(spark: SparkSession):
 
         print("\n--- Generando Top 30 Películas Más Vistas por País ---")
         for country_code in TARGET_COUNTRIES:
-            print(f"Procesando Top 30 para {country_code}...")
             df_country_movies = df_curated.filter(
                 (col("region") == country_code) &
                 (col("startYear").isNotNull()) & (col("startYear").cast(IntegerType()) >= start_year_threshold) &
@@ -305,9 +156,9 @@ def generate_kpis_and_visualizations(spark: SparkSession):
                 
                 plt.figure(figsize=(12, 10))
                 sns.barplot(x="numVotes", y="regional_title", data=df_country_movies_pd, palette="magma")
-                plt.title(f"Top 30 Películas Más Vistas en {country_code} (Últimos 25 Años)", fontsize=16)
-                plt.xlabel("Número de Votos", fontsize=12)
-                plt.ylabel("Título de la Película", fontsize=12)
+                plt.title(f"Top 30 películas mas vistas en {country_code} (ultimos 25 años)", fontsize=16)
+                plt.xlabel("Número de votos", fontsize=12)
+                plt.ylabel("Título de película", fontsize=12)
                 plt.xticks(fontsize=10)
                 plt.yticks(fontsize=8) 
                 plt.tight_layout()
@@ -340,9 +191,9 @@ def generate_kpis_and_visualizations(spark: SparkSession):
                 
                 plt.figure(figsize=(12, 10)) 
                 sns.barplot(x="numVotes", y="regional_title", data=df_country_movies_pd, palette="magma")
-                plt.title(f"Top 30 Películas Más Vistas en {country_code} (Últimos 25 Años)", fontsize=16)
-                plt.xlabel("Número de Votos", fontsize=12)
-                plt.ylabel("Título de la Película", fontsize=12)
+                plt.title(f"Top 30 películas mas vistas en {country_code} (ultimos 25 años)", fontsize=16)
+                plt.xlabel("Número de votos", fontsize=12)
+                plt.ylabel("Título de  película", fontsize=12)
                 plt.xticks(fontsize=10)
                 plt.yticks(fontsize=8) 
                 plt.tight_layout()
@@ -384,9 +235,9 @@ def generate_kpis_and_visualizations(spark: SparkSession):
 
                 plt.figure(figsize=(15, 8))
                 sns.lineplot(x="startYear_int", y="count", hue="genre", data=year_genre_trends_country_pd, marker='o')
-                plt.title(f"Número de Películas Estrenadas por Año por Género (Top {len(top_genres_names_country)} Géneros) en {country_code}", fontsize=16)
-                plt.xlabel("Año de Estreno", fontsize=12)
-                plt.ylabel("Número de Películas", fontsize=12)
+                plt.title(f"Número de películas estrenadas por año por género (Top {len(top_genres_names_country)} Géneros) en {country_code}", fontsize=16)
+                plt.xlabel("Año de eestreno", fontsize=12)
+                plt.ylabel("Número de películas", fontsize=12)
                 plt.grid(True)
                 plt.legend(title="Género", bbox_to_anchor=(1.05, 1), loc='upper left')
                 plt.tight_layout()
@@ -397,6 +248,253 @@ def generate_kpis_and_visualizations(spark: SparkSession):
     else:
         print("No se pudo generar el KPI de tendencias por año por género por país: columnas necesarias ('startYear', 'genres', 'region') no disponibles.")
 
+  
+    if 'runtimeMinutes' in df_curated_uy_spark.columns:
+        df_runtime_uy = df_curated_uy_spark.select('runtimeMinutes').filter(col('runtimeMinutes').isNotNull())
+        if df_runtime_uy.count() > 0:
+            df_runtime_uy_pd = df_runtime_uy.toPandas()
+            plt.figure(figsize=(10, 6))
+            sns.histplot(df_runtime_uy_pd['runtimeMinutes'], bins=30, kde=True, color='orange')
+            plt.title(f"Distribucion de duración de películas en {REGION_OF_INTEREST}", fontsize=16)
+            plt.xlabel("Duración en min", fontsize=12)
+            plt.ylabel("Frecuencia", fontsize=12)
+            plt.tight_layout()
+            plt.savefig(os.path.join(REPORTS_DIR, f"runtime_distribution_{REGION_OF_INTEREST}.png"))
+            plt.close()
+
+    if 'genres' in df_curated_uy_spark.columns and 'averageRating' in df_curated_uy_spark.columns:
+        df_genre_rating_uy = df_curated_uy_spark.filter(col('genres').isNotNull() & (trim(col('genres')) != '')) \
+            .withColumn('genre', explode(split(col('genres'), ','))) \
+            .withColumn('genre', trim(col('genre')))
+        genre_rating_uy = df_genre_rating_uy.groupBy('genre').agg(avg('averageRating').alias('avg_rating')).orderBy(col('avg_rating').desc())
+        if not genre_rating_uy.isEmpty():
+            genre_rating_uy_pd = genre_rating_uy.toPandas()
+            plt.figure(figsize=(14, 7))
+            sns.barplot(x='avg_rating', y='genre', data=genre_rating_uy_pd, palette='coolwarm')
+            plt.title(f"Rating promedio por gnrero en {REGION_OF_INTEREST}", fontsize=16)
+            plt.xlabel("Rating promedio", fontsize=12)
+            plt.ylabel("Género", fontsize=12)
+            plt.tight_layout()
+            plt.savefig(os.path.join(REPORTS_DIR, f"avg_rating_by_genre_{REGION_OF_INTEREST}.png"))
+            plt.close()
 
 
+    if 'numVotes' in df_curated_uy_spark.columns and 'averageRating' in df_curated_uy_spark.columns:
+        df_votes_rating_uy = df_curated_uy_spark.select('numVotes', 'averageRating').filter(col('numVotes').isNotNull() & col('averageRating').isNotNull())
+        if df_votes_rating_uy.count() > 0:
+            df_votes_rating_uy_pd = df_votes_rating_uy.toPandas()
+            plt.figure(figsize=(10, 6))
+            sns.scatterplot(x='numVotes', y='averageRating', data=df_votes_rating_uy_pd, alpha=0.5)
+            plt.title(f"Correlacion entre num de votos y rating en {REGION_OF_INTEREST}", fontsize=16)
+            plt.xlabel("Número de votos", fontsize=12)
+            plt.ylabel("Rating promedio", fontsize=12)
+            plt.tight_layout()
+            plt.savefig(os.path.join(REPORTS_DIR, f"votes_vs_rating_{REGION_OF_INTEREST}.png"))
+            plt.close()
+
+   
+
+    if 'directors' in df_curated_uy_spark.columns:
+        df_directors_uy = df_curated_uy_spark.select('directors').filter(col('directors').isNotNull())
+        df_directors_uy_pd = df_directors_uy.toPandas()
+        all_directors = df_directors_uy_pd['directors'].explode()
+        top_directors = all_directors.value_counts().head(10)
+        plt.figure(figsize=(12, 7))
+        sns.barplot(x=top_directors.values, y=top_directors.index, palette='Blues_r')
+        plt.title(f"Top 10 directores por cant de películas en {REGION_OF_INTEREST}", fontsize=16)
+        plt.xlabel("Cantidad de Películas", fontsize=12)
+        plt.ylabel("Director", fontsize=12)
+        plt.tight_layout()
+        plt.savefig(os.path.join(REPORTS_DIR, f"top_directors_{REGION_OF_INTEREST}.png"))
+        plt.close()
+
+    if 'principal_actors' in df_curated_uy_spark.columns:
+        df_actors_uy = df_curated_uy_spark.select('principal_actors').filter(col('principal_actors').isNotNull())
+        df_actors_uy_pd = df_actors_uy.toPandas()
+        all_actors = df_actors_uy_pd['principal_actors'].explode()
+        top_actors = all_actors.value_counts().head(10)
+        plt.figure(figsize=(12, 7))
+        sns.barplot(x=top_actors.values, y=top_actors.index, palette='Greens_r')
+        plt.title(f"Top 10 actores/actrices por número de peliculas en {REGION_OF_INTEREST}", fontsize=16)
+        plt.xlabel("Cantidad de Películas", fontsize=12)
+        plt.ylabel("Actor/actriz", fontsize=12)
+        plt.tight_layout()
+        plt.savefig(os.path.join(REPORTS_DIR, f"top_actors_{REGION_OF_INTEREST}.png"))
+        plt.close()
+
+
+    if all(col in df_curated_uy_spark.columns for col in ['averageRating', 'numVotes', 'regional_title', 'startYear']):
+        df_revenue_potential_uy = df_curated_uy_spark.filter(
+            col('averageRating').isNotNull() & col('numVotes').isNotNull()
+        ).withColumn('revenue_potential', col('averageRating') * col('numVotes'))
+        
+        top_revenue_uy = df_revenue_potential_uy.orderBy(col('revenue_potential').desc()).limit(15)
+        if not top_revenue_uy.isEmpty():
+            top_revenue_uy_pd = top_revenue_uy.select('regional_title', 'startYear', 'revenue_potential', 'averageRating', 'numVotes').toPandas()
+            
+            plt.figure(figsize=(14, 8))
+            sns.barplot(x='revenue_potential', y='regional_title', data=top_revenue_uy_pd, palette='viridis')
+            plt.title(f"Top 15 películas vista en uruguay por potencial de ingresos (rating por votos)", fontsize=16)
+            plt.xlabel("Potencial de ingresos", fontsize=12)
+            plt.ylabel("Titulo de la película", fontsize=10)
+            plt.tight_layout()
+            plt.savefig(os.path.join(REPORTS_DIR, f"top_revenue_potential_{REGION_OF_INTEREST}.png"))
+            plt.close()
+
+    if all(col in df_curated_uy_spark.columns for col in ['genres', 'startYear']):
+        current_year = 2025
+        df_genre_trends_uy = df_curated_uy_spark.filter(
+            col('startYear').isNotNull() & 
+            (col('startYear').cast(IntegerType()) >= current_year - 20) &
+            col('genres').isNotNull()
+        ).withColumn('startYear_int', col('startYear').cast(IntegerType())) \
+         .withColumn('genre', explode(split(col('genres'), ','))) \
+         .withColumn('genre', trim(col('genre')))
+        
+        genre_trends_uy = df_genre_trends_uy.groupBy('startYear_int', 'genre').count().orderBy('startYear_int', 'genre')
+        if not genre_trends_uy.isEmpty():
+            genre_trends_uy_pd = genre_trends_uy.toPandas()
+            
+            top_genres = genre_trends_uy_pd.groupby('genre')['count'].sum().nlargest(5).index
+            genre_trends_filtered = genre_trends_uy_pd[genre_trends_uy_pd['genre'].isin(top_genres)]
+            
+            plt.figure(figsize=(15, 8))
+            for genre in top_genres:
+                genre_data = genre_trends_filtered[genre_trends_filtered['genre'] == genre]
+                plt.plot(genre_data['startYear_int'], genre_data['count'], marker='o', label=genre, linewidth=2)
+            
+            plt.title(f"Tendencias de popularidad de géneros en Uruguay (ultimos 20 años)", fontsize=16)
+            plt.xlabel("Año", fontsize=12)
+            plt.ylabel("Número de Películas", fontsize=12)
+            plt.legend(title="Género", bbox_to_anchor=(1.05, 1), loc='upper left')
+            plt.grid(True, alpha=0.3)
+            plt.tight_layout()
+            plt.savefig(os.path.join(REPORTS_DIR, f"genre_trends_20years_{REGION_OF_INTEREST}.png"))
+            plt.close()
+
+    if 'runtimeMinutes' in df_curated_uy_spark.columns:
+        df_runtime_uy = df_curated_uy_spark.select('runtimeMinutes').filter(col('runtimeMinutes').isNotNull())
+        if df_runtime_uy.count() > 0:
+            df_runtime_uy_pd = df_runtime_uy.toPandas()
+            plt.figure(figsize=(10, 6))
+            sns.histplot(df_runtime_uy_pd['runtimeMinutes'], bins=30, kde=True, color='orange')
+            plt.title(f"Distribución de duracion de películas en {REGION_OF_INTEREST}", fontsize=16)
+            plt.xlabel("Duración en min", fontsize=12)
+            plt.ylabel("Frecuencia", fontsize=12)
+            plt.tight_layout()
+            plt.savefig(os.path.join(REPORTS_DIR, f"runtime_distribution_{REGION_OF_INTEREST}.png"))
+            plt.close()
+
+
+    if 'genres' in df_curated_uy_spark.columns and 'averageRating' in df_curated_uy_spark.columns:
+        df_genre_rating_uy = df_curated_uy_spark.filter(col('genres').isNotNull() & (trim(col('genres')) != '')) \
+            .withColumn('genre', explode(split(col('genres'), ','))) \
+            .withColumn('genre', trim(col('genre')))
+        genre_rating_uy = df_genre_rating_uy.groupBy('genre').agg(avg('averageRating').alias('avg_rating')).orderBy(col('avg_rating').desc())
+        if not genre_rating_uy.isEmpty():
+            genre_rating_uy_pd = genre_rating_uy.toPandas()
+            plt.figure(figsize=(14, 7))
+            sns.barplot(x='avg_rating', y='genre', data=genre_rating_uy_pd, palette='coolwarm')
+            plt.title(f"Rating promedio por género en {REGION_OF_INTEREST}", fontsize=16)
+            plt.xlabel("Rating promedio", fontsize=12)
+            plt.ylabel("Género", fontsize=12)
+            plt.tight_layout()
+            plt.savefig(os.path.join(REPORTS_DIR, f"avg_rating_by_genre_{REGION_OF_INTEREST}.png"))
+            plt.close()
+
+    if 'numVotes' in df_curated_uy_spark.columns and 'averageRating' in df_curated_uy_spark.columns:
+        df_votes_rating_uy = df_curated_uy_spark.select('numVotes', 'averageRating').filter(col('numVotes').isNotNull() & col('averageRating').isNotNull())
+        if df_votes_rating_uy.count() > 0:
+            df_votes_rating_uy_pd = df_votes_rating_uy.toPandas()
+            plt.figure(figsize=(10, 6))
+            sns.scatterplot(x='numVotes', y='averageRating', data=df_votes_rating_uy_pd, alpha=0.5)
+            plt.title(f"Correlación entre num de votos y rating en {REGION_OF_INTEREST}", fontsize=16)
+            plt.xlabel("Número de votos", fontsize=12)
+            plt.ylabel("Rating promedio", fontsize=12)
+            plt.tight_layout()
+            plt.savefig(os.path.join(REPORTS_DIR, f"votes_vs_rating_{REGION_OF_INTEREST}.png"))
+            plt.close()
+
+
+
+    if 'directors' in df_curated_uy_spark.columns:
+        df_directors_uy = df_curated_uy_spark.select('directors').filter(col('directors').isNotNull())
+        df_directors_uy_pd = df_directors_uy.toPandas()
+        all_directors = df_directors_uy_pd['directors'].explode()
+        top_directors = all_directors.value_counts().head(10)
+        plt.figure(figsize=(12, 7))
+        sns.barplot(x=top_directors.values, y=top_directors.index, palette='Blues_r')
+        plt.title(f"Top 10 directores por numero de películas en {REGION_OF_INTEREST}", fontsize=16)
+        plt.xlabel("Cantidad de películas", fontsize=12)
+        plt.ylabel("Director", fontsize=12)
+        plt.tight_layout()
+        plt.savefig(os.path.join(REPORTS_DIR, f"top_directors_{REGION_OF_INTEREST}.png"))
+        plt.close()
+
+
+    if 'principal_actors' in df_curated_uy_spark.columns:
+        df_actors_uy = df_curated_uy_spark.select('principal_actors').filter(col('principal_actors').isNotNull())
+        df_actors_uy_pd = df_actors_uy.toPandas()
+        all_actors = df_actors_uy_pd['principal_actors'].explode()
+        top_actors = all_actors.value_counts().head(10)
+        plt.figure(figsize=(12, 7))
+        sns.barplot(x=top_actors.values, y=top_actors.index, palette='Greens_r')
+        plt.title(f"Top 10 actores/actrices por número de películas en {REGION_OF_INTEREST}", fontsize=16)
+        plt.xlabel("Cantidad de películas", fontsize=12)
+        plt.ylabel("actor/actriz", fontsize=12)
+        plt.tight_layout()
+        plt.savefig(os.path.join(REPORTS_DIR, f"top_actors_{REGION_OF_INTEREST}.png"))
+        plt.close()
+
+    
+    if all(col in df_curated_uy_spark.columns for col in ['averageRating', 'numVotes', 'regional_title', 'startYear']):
+        df_revenue_potential_uy = df_curated_uy_spark.filter(
+            col('averageRating').isNotNull() & col('numVotes').isNotNull()
+        ).withColumn('revenue_potential', col('averageRating') * col('numVotes'))
+        
+        top_revenue_uy = df_revenue_potential_uy.orderBy(col('revenue_potential').desc()).limit(15)
+        if not top_revenue_uy.isEmpty():
+            top_revenue_uy_pd = top_revenue_uy.select('regional_title', 'startYear', 'revenue_potential', 'averageRating', 'numVotes').toPandas()
+            
+            plt.figure(figsize=(14, 8))
+            sns.barplot(x='revenue_potential', y='regional_title', data=top_revenue_uy_pd, palette='viridis')
+            plt.title(f"Top 15 películas uruguayas por potencial de ingresos (rating por votos)", fontsize=16)
+            plt.xlabel("Potencial de ingresos", fontsize=12)
+            plt.ylabel("Título de la película", fontsize=10)
+            plt.tight_layout()
+            plt.savefig(os.path.join(REPORTS_DIR, f"top_revenue_potential_{REGION_OF_INTEREST}.png"))
+            plt.close()
+
+    if all(col in df_curated_uy_spark.columns for col in ['genres', 'startYear']):
+        current_year = 2025
+        df_genre_trends_uy = df_curated_uy_spark.filter(
+            col('startYear').isNotNull() & 
+            (col('startYear').cast(IntegerType()) >= current_year - 20) &
+            col('genres').isNotNull()
+        ).withColumn('startYear_int', col('startYear').cast(IntegerType())) \
+         .withColumn('genre', explode(split(col('genres'), ','))) \
+         .withColumn('genre', trim(col('genre')))
+        
+        genre_trends_uy = df_genre_trends_uy.groupBy('startYear_int', 'genre').count().orderBy('startYear_int', 'genre')
+        if not genre_trends_uy.isEmpty():
+            genre_trends_uy_pd = genre_trends_uy.toPandas()
+            
+            top_genres = genre_trends_uy_pd.groupby('genre')['count'].sum().nlargest(5).index
+            genre_trends_filtered = genre_trends_uy_pd[genre_trends_uy_pd['genre'].isin(top_genres)]
+            
+            plt.figure(figsize=(15, 8))
+            for genre in top_genres:
+                genre_data = genre_trends_filtered[genre_trends_filtered['genre'] == genre]
+                plt.plot(genre_data['startYear_int'], genre_data['count'], marker='o', label=genre, linewidth=2)
+            
+            plt.title(f"Tendencias de popularidad de géneros en uruguay (ultimos 20 años)", fontsize=16)
+            plt.xlabel("Año", fontsize=12)
+            plt.ylabel("Número de películas", fontsize=12)
+            plt.legend(title="Género", bbox_to_anchor=(1.05, 1), loc='upper left')
+            plt.grid(True, alpha=0.3)
+            plt.tight_layout()
+            plt.savefig(os.path.join(REPORTS_DIR, f"genre_trends_20years_{REGION_OF_INTEREST}.png"))
+            plt.close()
+
+   
 
