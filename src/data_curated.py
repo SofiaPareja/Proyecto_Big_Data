@@ -34,8 +34,7 @@ def transform_to_curated_zone(spark: SparkSession):
     )
     print(f"DataFrame de películas y series cargado con {df_movies_series.count()} registros.")
    
-    # df_regional_akas = df_akas.filter(col("region") == REGION_OF_INTEREST) \
-    #                           .select(col("titleId").alias("tconst_akas"), "title", "region", "language")
+
 
     df_regional_akas = df_akas.filter(
         (col("region").isin(TARGET_REGIONS_FOR_CURATION)) & 
@@ -51,15 +50,7 @@ def transform_to_curated_zone(spark: SparkSession):
     print(f"DataFrame de títulos regionales cargado con {df_regional_akas.count()} registros.")
     
 
-    # df_movies_with_akas = df_movies_series.join(
-    #     df_regional_akas,
-    #     on=df_movies_series.tconst == df_regional_akas.tconst_akas,
-    #     how="left_outer"
-    # ).withColumn(
-    #     "regional_title",
-    #     when(col("region").isNotNull(), col("title"))
-    #     .otherwise(col("primaryTitle"))
-    # ).drop("title", "region", "language", "tconst_akas")
+
 
     df_movies_with_akas = df_movies_series.join(
         df_regional_akas,
